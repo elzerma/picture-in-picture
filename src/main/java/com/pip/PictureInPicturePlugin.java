@@ -36,6 +36,9 @@ public class PictureInPicturePlugin extends Plugin
 {
 	private static boolean focused = true;
 	private static boolean pipUp = false;
+	// after a click-to-focus, don't reopen the PIP until focus arrives or this time passes
+	private static final long FOCUS_GRACE_MS = 2000;
+	private volatile long suppressPipUntil = 0;
 	private JFrame pipFrame = null;
 	private JLabel lbl = null;
 	private pipBar leftBar, rightBar;
@@ -118,41 +121,19 @@ public class PictureInPicturePlugin extends Plugin
 
 		public void mousePressed(MouseEvent e)
 		{
-			if (e.isShiftDown())
+			PictureInPictureConfig.clickAction action = e.isShiftDown() ? config.shiftClickAction() : config.clickAction();
+			if (action == DRAG_MODE)
 			{
-				if (config.shiftClickAction() == DRAG_MODE)
-				{
-					this.startDrag = this.getScreenLocation(e);
-					this.startLocation = this.target.getLocation();
-				}
-				else if (config.shiftClickAction() == REQUEST_FOCUS)
-				{
-					destroyPip();
-					clientUi.requestFocus();
-				}
-				else if (config.shiftClickAction() == FORCE_FOCUS)
-				{
-					destroyPip();
-					clientUi.forceFocus();
-				}
+				this.startDrag = this.getScreenLocation(e);
+				this.startLocation = this.target.getLocation();
 			}
-			else
+			else if (action == REQUEST_FOCUS)
 			{
-				if (config.clickAction() == DRAG_MODE)
-				{
-					this.startDrag = this.getScreenLocation(e);
-					this.startLocation = this.target.getLocation();
-				}
-				else if (config.clickAction() == REQUEST_FOCUS)
-				{
-					destroyPip();
-					clientUi.requestFocus();
-				}
-				else if (config.clickAction() == FORCE_FOCUS)
-				{
-					destroyPip();
-					clientUi.forceFocus();
-				}
+				focusClient(false);
+			}
+			else if (action == FORCE_FOCUS)
+			{
+				focusClient(true);
 			}
 		}
 
@@ -342,10 +323,20 @@ public class PictureInPicturePlugin extends Plugin
 	@Subscribe
 	public void onClientTick(ClientTick event)
 	{
-		if (!focused)
+		// checked every tick (not just on redraw) so a PIP that opened late is closed once RL has focus
+		focused = clientUi.isFocused();
+		if (focused)
+		{
+			suppressPipUntil = 0;
+			if (pipFrame != null)
+			{
+				destroyPip();
+			}
+		}
+		else if (pipFrame == null && !isPipSuppressed())
 		{
 			Window window = javax.swing.FocusManager.getCurrentManager().getActiveWindow();
-			if (window == null && pipFrame == null)
+			if (window == null)
 			{
 				updateHitpoints();
 				updatePrayer();
@@ -357,14 +348,6 @@ public class PictureInPicturePlugin extends Plugin
 		{
 			clientTick = 0;
 
-			if (focused != clientUi.isFocused())
-			{
-				focused = clientUi.isFocused();
-				if (focused)
-				{
-					destroyPip();
-				}
-			}
 			if (!focused && pipFrame != null && pipUp)
 			{
 				updatePip();
@@ -428,7 +411,8 @@ public class PictureInPicturePlugin extends Plugin
 			@Override
 			public void run()
 			{
-				if (!pipUp)
+				// focus may have returned while this was queued
+				if (!pipUp && !clientUi.isFocused() && !isPipSuppressed())
 				{
 
 					log.debug("Initializing PIP");
@@ -570,6 +554,42 @@ public class PictureInPicturePlugin extends Plugin
 		return effectiveScreenArea;
 	}
 
+	private void focusClient(boolean force)
+	{
+		suppressPipUntil = System.currentTimeMillis() + FOCUS_GRACE_MS;
+
+		if (force)
+		{
+			clientUi.forceFocus();
+		}
+		else
+		{
+			// ClientUI.requestFocus only focuses within the window on Windows, so also raise the frame.
+			// Windows allows this because the click on the PIP was the last user input.
+			Window window = SwingUtilities.getWindowAncestor(client.getCanvas());
+			if (window instanceof Frame)
+			{
+				Frame frame = (Frame) window;
+				if ((frame.getExtendedState() & Frame.ICONIFIED) != 0)
+				{
+					frame.setExtendedState(frame.getExtendedState() & ~Frame.ICONIFIED);
+				}
+			}
+			if (window != null)
+			{
+				window.toFront();
+			}
+			clientUi.requestFocus();
+		}
+
+		destroyPip();
+	}
+
+	private boolean isPipSuppressed()
+	{
+		return System.currentTimeMillis() < suppressPipUntil;
+	}
+
 	private void setupOpacity()
 	{
 		hovered = false;
@@ -649,6 +669,12 @@ public class PictureInPicturePlugin extends Plugin
 
 	private void destroyPip()
 	{
+		// run on the EDT so this can't interleave with startPip building the frame
+		if (!SwingUtilities.isEventDispatchThread())
+		{
+			SwingUtilities.invokeLater(this::destroyPip);
+			return;
+		}
 
 		// Destroy the PIP Frame
 		if (pipFrame != null)
