@@ -41,6 +41,9 @@ public class PictureInPicturePlugin extends Plugin
 	private pipBar leftBar, rightBar;
 	private Skill leftSkill, rightSkill;
 	private Point pipPoint = new Point(0, 0);
+	private boolean hovered = false;
+	private boolean perPixelOpacity = false;
+	private boolean windowOpacity = false;
 
 	private int clientTick = 0;
 	private int pipWidth, pipHeight;
@@ -101,10 +104,16 @@ public class PictureInPicturePlugin extends Plugin
 
 		public void mouseEntered(MouseEvent e)
 		{
+			setHovered(true);
 		}
 
 		public void mouseExited(MouseEvent e)
 		{
+			// exit also fires when moving onto a child component, so only un-hover when leaving the window
+			if (!this.target.getBounds().contains(e.getLocationOnScreen()))
+			{
+				setHovered(false);
+			}
 		}
 
 		public void mousePressed(MouseEvent e)
@@ -207,6 +216,7 @@ public class PictureInPicturePlugin extends Plugin
 			this.maxLevel = maxLevel;
 			this.currentLevel = currentLevel;
 			this.colors = colors;
+			setOpaque(false);
 		}
 
 		private void updateBar(int maxLevel, int currentLevel, Color[] colors)
@@ -218,9 +228,11 @@ public class PictureInPicturePlugin extends Plugin
 		}
 
 		@Override
-		protected void paintComponent(Graphics g)
+		protected void paintComponent(Graphics graphics)
 		{
-			super.paintComponent(g);
+			super.paintComponent(graphics);
+			Graphics2D g = (Graphics2D) graphics.create();
+			g.setComposite(AlphaComposite.SrcOver.derive(paintAlpha(barAlpha())));
 			g.setColor(colors[0]);
 			g.fillRect(0, 0, config.getBarWidth(), pipHeight);
 			int bgHeight = (int) ((maxLevel - currentLevel) * pipHeight / ((float) maxLevel));
@@ -246,12 +258,44 @@ public class PictureInPicturePlugin extends Plugin
 				g.setColor(Color.WHITE);
 				g.drawString(text, x, y);
 			}
+			g.dispose();
 		}
 
 		@Override
 		public Dimension getPreferredSize()
 		{
 			return new Dimension(config.getBarWidth(), pipHeight);
+		}
+	}
+
+	// window background, visible as the border around the image and bars
+	private class pipPanel extends JPanel
+	{
+		private pipPanel()
+		{
+			setOpaque(false);
+		}
+
+		@Override
+		protected void paintComponent(Graphics graphics)
+		{
+			Graphics2D g = (Graphics2D) graphics.create();
+			g.setComposite(AlphaComposite.SrcOver.derive(paintAlpha(imageAlpha())));
+			g.setColor(getBackground());
+			g.fillRect(0, 0, getWidth(), getHeight());
+			g.dispose();
+		}
+	}
+
+	private class pipImage extends JLabel
+	{
+		@Override
+		protected void paintComponent(Graphics graphics)
+		{
+			Graphics2D g = (Graphics2D) graphics.create();
+			g.setComposite(AlphaComposite.SrcOver.derive(paintAlpha(imageAlpha())));
+			super.paintComponent(g);
+			g.dispose();
 		}
 	}
 
@@ -406,11 +450,12 @@ public class PictureInPicturePlugin extends Plugin
 					ImageIcon icon = new ImageIcon(img);
 
 					pipFrame = new JFrame("Picture in Picture");
+					pipFrame.setContentPane(new pipPanel());
 					pipFrame.setFocusableWindowState(false);
 					pipFrame.setType(Window.Type.UTILITY);
 					pipFrame.setLayout(new FlowLayout(FlowLayout.LEFT, config.borderWidth(), config.borderWidth()));
 					pipFrame.setSize(img.getWidth(null) + offset, img.getHeight(null));
-					lbl = new JLabel();
+					lbl = new pipImage();
 					lbl.setIcon(icon);
 					pipFrame.setUndecorated(true);
 
@@ -499,6 +544,7 @@ public class PictureInPicturePlugin extends Plugin
 					}
 
 					pipFrame.setLocation(pipPoint);
+					setupOpacity();
 
 					// Display the window.
 					pipFrame.pack();
@@ -522,6 +568,78 @@ public class PictureInPicturePlugin extends Plugin
 		effectiveScreenArea.height = bounds.height - screenInsets.top - screenInsets.bottom;
 		effectiveScreenArea.width = bounds.width - screenInsets.left - screenInsets.right;
 		return effectiveScreenArea;
+	}
+
+	private void setupOpacity()
+	{
+		hovered = false;
+		perPixelOpacity = false;
+		windowOpacity = false;
+
+		// skip translucency entirely at the defaults so the window behaves exactly as before
+		if (config.opacity() == 100 && config.hoverOpacity() == 100 && config.barOpacity() == 100)
+		{
+			return;
+		}
+
+		GraphicsDevice device = pipFrame.getGraphicsConfiguration().getDevice();
+		if (device.isWindowTranslucencySupported(GraphicsDevice.WindowTranslucency.PERPIXEL_TRANSLUCENT))
+		{
+			// each component paints its own alpha, so the bars can differ from the image
+			perPixelOpacity = true;
+			pipFrame.setBackground(new Color(0, 0, 0, 0));
+		}
+		else if (device.isWindowTranslucencySupported(GraphicsDevice.WindowTranslucency.TRANSLUCENT))
+		{
+			// fallback: one opacity for the whole window, Bar Opacity is ignored
+			windowOpacity = true;
+		}
+		else
+		{
+			log.debug("PIP opacity not supported on this display");
+		}
+		applyOpacity();
+	}
+
+	private void applyOpacity()
+	{
+		if (pipFrame == null)
+		{
+			return;
+		}
+		if (perPixelOpacity)
+		{
+			pipFrame.repaint();
+		}
+		else if (windowOpacity)
+		{
+			pipFrame.setOpacity(imageAlpha());
+		}
+	}
+
+	private void setHovered(boolean hovered)
+	{
+		if (this.hovered != hovered)
+		{
+			this.hovered = hovered;
+			applyOpacity();
+		}
+	}
+
+	private float imageAlpha()
+	{
+		return (hovered ? config.hoverOpacity() : config.opacity()) / 100f;
+	}
+
+	private float barAlpha()
+	{
+		return (hovered ? config.hoverOpacity() : config.barOpacity()) / 100f;
+	}
+
+	// components only paint their own alpha when the window supports per-pixel translucency
+	private float paintAlpha(float alpha)
+	{
+		return perPixelOpacity ? alpha : 1f;
 	}
 
 	private int getOffset()

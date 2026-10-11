@@ -322,6 +322,40 @@ public interface PictureInPictureConfig extends Config
 		return renderQuality.MEDIUM;
 	}
 
+	@ConfigItem(
+		keyName = "opacity",
+		name = "Opacity",
+		description = "Sets the opacity of the Picture in Picture image and border (1-100%)",
+		position = 2,
+		section = imageQuality
+	)
+	@Range(
+		min = 1,
+		max = 100
+	)
+	@Units(Units.PERCENT)
+	default int opacity()
+	{
+		return 100;
+	}
+
+	@ConfigItem(
+		keyName = "hoverOpacity",
+		name = "Hover Opacity",
+		description = "Opacity of the whole Picture in Picture while the mouse is over it (1-100%)",
+		position = 3,
+		section = imageQuality
+	)
+	@Range(
+		min = 1,
+		max = 100
+	)
+	@Units(Units.PERCENT)
+	default int hoverOpacity()
+	{
+		return 100;
+	}
+
 
 	// =========== Status Bar Section ===========
 
@@ -394,6 +428,23 @@ public interface PictureInPictureConfig extends Config
 	default boolean barText()
 	{
 		return true;
+	}
+
+	@ConfigItem(
+		keyName = "barOpacity",
+		name = "Bar Opacity",
+		description = "Sets the opacity of the status bars (1-100%)",
+		position = 5,
+		section = statusBars
+	)
+	@Range(
+		min = 1,
+		max = 100
+	)
+	@Units(Units.PERCENT)
+	default int barOpacity()
+	{
+		return 100;
 	}
 
 }
