@@ -17,6 +17,7 @@ Allows for displaying RuneLite in "Picture in Picture" mode when focus is elsewh
 - Added Bar Opacity setting for the status bars
 - Fixed Request Focus not bringing RuneLite to the front on Windows
 - Fixed PIP reappearing over RuneLite after clicking it to focus
+- Fixed errors when dragging the PIP with Click or Shift+Click set to Request Focus or Force Focus
 - Updated to the current RuneLite plugin template
 
 ### 1.4.2
