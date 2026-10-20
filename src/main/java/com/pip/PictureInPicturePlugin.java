@@ -571,21 +571,6 @@ public class PictureInPicturePlugin extends Plugin
 		}
 		else
 		{
-			// ClientUI.requestFocus only focuses within the window on Windows, so also raise the frame.
-			// Windows allows this because the click on the PIP was the last user input.
-			Window window = SwingUtilities.getWindowAncestor(client.getCanvas());
-			if (window instanceof Frame)
-			{
-				Frame frame = (Frame) window;
-				if ((frame.getExtendedState() & Frame.ICONIFIED) != 0)
-				{
-					frame.setExtendedState(frame.getExtendedState() & ~Frame.ICONIFIED);
-				}
-			}
-			if (window != null)
-			{
-				window.toFront();
-			}
 			clientUi.requestFocus();
 		}
 
