@@ -342,8 +342,8 @@ public class PictureInPicturePlugin extends Plugin
 		}
 		else if (pipFrame == null && !isPipSuppressed())
 		{
-			Window window = javax.swing.FocusManager.getCurrentManager().getActiveWindow();
-			if (window == null)
+			// only open once focus has left RuneLite entirely, not while one of its dialogs is active
+			if (!isAnyWindowActive())
 			{
 				updateHitpoints();
 				updatePrayer();
@@ -595,6 +595,18 @@ public class PictureInPicturePlugin extends Plugin
 	private boolean isPipSuppressed()
 	{
 		return System.currentTimeMillis() < suppressPipUntil;
+	}
+
+	private boolean isAnyWindowActive()
+	{
+		for (Window window : Window.getWindows())
+		{
+			if (window.isActive())
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private void setupOpacity()
