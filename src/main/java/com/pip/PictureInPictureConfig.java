@@ -91,8 +91,8 @@ public interface PictureInPictureConfig extends Config
 	@RequiredArgsConstructor
 	enum clickAction
 	{
-		REQUEST_FOCUS("Request Focus", 0),
-		FORCE_FOCUS("Force Focus", 1),
+		// Force Focus was merged into this one; the name stays REQUEST_FOCUS so saved settings still load
+		REQUEST_FOCUS("Focus RuneLite", 0),
 		DRAG_MODE("Drag Mode", 2),
 		DO_NOTHING("Do Nothing", 3);
 
