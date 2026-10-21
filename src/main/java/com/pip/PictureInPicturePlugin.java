@@ -9,7 +9,6 @@ import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.events.ProfileChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.ClientUI;
@@ -128,7 +127,7 @@ public class PictureInPicturePlugin extends Plugin
 				this.startDrag = this.getScreenLocation(e);
 				this.startLocation = this.target.getLocation();
 			}
-			else if (action == REQUEST_FOCUS)
+			else if (action == REQUEST_FOCUS || action == FORCE_FOCUS)
 			{
 				focusClient();
 			}
@@ -306,7 +305,6 @@ public class PictureInPicturePlugin extends Plugin
 	protected void startUp() throws Exception
 	{
 		log.debug("PIP started!");
-		migrateClickActions();
 	}
 
 	@Override
@@ -314,25 +312,6 @@ public class PictureInPicturePlugin extends Plugin
 	{
 		log.debug("PIP stopped!");
 		destroyPip();
-	}
-
-	// Force Focus was merged into Request Focus, so move saved Force Focus values over.
-	// Profile switches don't restart the plugin, so this also runs on ProfileChanged.
-	private void migrateClickActions()
-	{
-		for (String key : new String[]{"clickAction", "shiftClickAction"})
-		{
-			if ("FORCE_FOCUS".equals(configManager.getConfiguration("pip", key)))
-			{
-				configManager.setConfiguration("pip", key, REQUEST_FOCUS);
-			}
-		}
-	}
-
-	@Subscribe
-	public void onProfileChanged(ProfileChanged event)
-	{
-		migrateClickActions();
 	}
 
 	@Subscribe
@@ -582,7 +561,8 @@ public class PictureInPicturePlugin extends Plugin
 	{
 		suppressPipUntil = System.currentTimeMillis() + FOCUS_GRACE_MS;
 
-		// not ClientUI.requestFocus: it doesn't activate RL on Windows, so the PIP came back once the grace period ran out
+		// both click actions force focus: ClientUI.requestFocus doesn't activate RL on Windows,
+		// so the PIP came back once the grace period ran out
 		clientUi.forceFocus();
 
 		destroyPip();
