@@ -38,6 +38,8 @@ public class PictureInPicturePlugin extends Plugin
 	private static boolean pipUp = false;
 	// after a click-to-focus, don't reopen the PIP until focus arrives or this time passes
 	private static final long FOCUS_GRACE_MS = 2000;
+	// with Click and Drag, how far the mouse has to move while held before a press becomes a drag
+	private static final int DRAG_THRESHOLD = 5;
 	private volatile long suppressPipUntil = 0;
 	private JFrame pipFrame = null;
 	private JLabel lbl = null;
@@ -79,6 +81,8 @@ public class PictureInPicturePlugin extends Plugin
 		JFrame target;
 		Point startDrag;
 		Point startLocation;
+		// with Click and Drag, the press's action waits here for the release unless the press becomes a drag
+		PictureInPictureConfig.clickAction pendingClick;
 
 		public MoveMouseListener(JFrame target)
 		{
@@ -122,12 +126,28 @@ public class PictureInPicturePlugin extends Plugin
 		public void mousePressed(MouseEvent e)
 		{
 			PictureInPictureConfig.clickAction action = e.isShiftDown() ? config.shiftClickAction() : config.clickAction();
-			if (action == DRAG_MODE)
+			// cleared every press so an earlier drag can't carry over into a press that isn't one
+			this.startDrag = null;
+			this.startLocation = null;
+			this.pendingClick = null;
+			if (action == DRAG_MODE || config.clickAndDrag())
 			{
 				this.startDrag = this.getScreenLocation(e);
 				this.startLocation = this.target.getLocation();
+				if (action != DRAG_MODE)
+				{
+					this.pendingClick = action;
+				}
 			}
-			else if (action == REQUEST_FOCUS || action == FORCE_FOCUS)
+			else
+			{
+				runClickAction(action);
+			}
+		}
+
+		void runClickAction(PictureInPictureConfig.clickAction action)
+		{
+			if (action == REQUEST_FOCUS || action == FORCE_FOCUS)
 			{
 				focusClient();
 			}
@@ -135,6 +155,15 @@ public class PictureInPicturePlugin extends Plugin
 
 		public void mouseReleased(MouseEvent e)
 		{
+			if (this.pendingClick != null)
+			{
+				// released without dragging, so it was a click
+				PictureInPictureConfig.clickAction action = this.pendingClick;
+				this.pendingClick = null;
+				runClickAction(action);
+				return;
+			}
+
 			int newX, newY;
 			int offset = getOffset();
 			Rectangle effectiveScreenArea = getEffectiveScreenArea();
@@ -169,7 +198,7 @@ public class PictureInPicturePlugin extends Plugin
 
 		public void mouseDragged(MouseEvent e)
 		{
-			// A drag is only valid when mousePressed entered drag mode and recorded a start point.
+			// A drag is only valid when mousePressed recorded a start point (Drag Mode or Click and Drag).
 			// Otherwise (e.g. the click action is focus rather than drag) these are null.
 			if (this.startDrag == null || this.startLocation == null)
 			{
@@ -177,6 +206,16 @@ public class PictureInPicturePlugin extends Plugin
 			}
 
 			Point current = this.getScreenLocation(e);
+			if (this.pendingClick != null)
+			{
+				// still a click until the mouse moves far enough
+				if (current.distance(this.startDrag) < DRAG_THRESHOLD)
+				{
+					return;
+				}
+				this.pendingClick = null;
+			}
+
 			Point offset = new Point((int) current.getX() - (int) startDrag.getX(), (int) current.getY() - (int) startDrag.getY());
 			pipPoint = new Point((int) (this.startLocation.getX() + offset.getX()), (int) (this.startLocation.getY() + offset.getY()));
 			target.setLocation(pipPoint);

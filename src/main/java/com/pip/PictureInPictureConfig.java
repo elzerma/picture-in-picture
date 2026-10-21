@@ -277,10 +277,22 @@ public interface PictureInPictureConfig extends Config
 	}
 
 	@ConfigItem(
-		keyName = "preserveShiftDrag",
-		name = "Preserve Shift+Drag",
-		description = "Save the PIP location following Shift+Drag",
+		keyName = "clickAndDrag",
+		name = "Click and Drag",
+		description = "Hold the mouse button and drag to move the PIP, no Shift needed. A click without dragging still does the Click Action",
 		position = 8,
+		section = sizeAndPosition
+	)
+	default boolean clickAndDrag()
+	{
+		return false;
+	}
+
+	@ConfigItem(
+		keyName = "preserveShiftDrag",
+		name = "Preserve Drag Position",
+		description = "Save the PIP location after dragging it",
+		position = 9,
 		section = sizeAndPosition
 	)
 	default boolean preserveShiftDrag()
