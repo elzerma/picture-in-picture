@@ -127,13 +127,9 @@ public class PictureInPicturePlugin extends Plugin
 				this.startDrag = this.getScreenLocation(e);
 				this.startLocation = this.target.getLocation();
 			}
-			else if (action == REQUEST_FOCUS)
+			else if (action == REQUEST_FOCUS || action == FORCE_FOCUS)
 			{
-				focusClient(false);
-			}
-			else if (action == FORCE_FOCUS)
-			{
-				focusClient(true);
+				focusClient();
 			}
 		}
 
@@ -561,18 +557,13 @@ public class PictureInPicturePlugin extends Plugin
 		return effectiveScreenArea;
 	}
 
-	private void focusClient(boolean force)
+	private void focusClient()
 	{
 		suppressPipUntil = System.currentTimeMillis() + FOCUS_GRACE_MS;
 
-		if (force)
-		{
-			clientUi.forceFocus();
-		}
-		else
-		{
-			clientUi.requestFocus();
-		}
+		// both click actions force focus: ClientUI.requestFocus doesn't activate RL on Windows,
+		// so the PIP came back once the grace period ran out
+		clientUi.forceFocus();
 
 		destroyPip();
 	}
